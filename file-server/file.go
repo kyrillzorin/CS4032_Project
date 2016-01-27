@@ -2,17 +2,27 @@ package main
 
 import (
 	"bufio"
-	"io/ioutil"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
-	"log"
 
 	"github.com/boltdb/bolt"
 )
 
-ReadFile(filename []byte) []byte{
+var db *bolt.DB
+
+func initDB() error {
+	var err error
+	db, err = bolt.Open("file-server.db", 0600, nil)
+	return err
+}
+
+func closeDB() {
+	db.Close()
+}
+
+func ReadFile(filename []byte) []byte {
 	var file []byte
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("files"))
@@ -22,7 +32,7 @@ ReadFile(filename []byte) []byte{
 	return file
 }
 
-WriteFile(filename []byte, filedata []byte) error{
+func WriteFile(filename []byte, filedata []byte) error {
 	return db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("files"))
 		if err != nil {
@@ -42,22 +52,32 @@ func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
 	}
 }
 
-func handleRead(message string, conn net.Conn, connReader *bufio.Reader) bool {
+func handleRead(message string, conn net.Conn, connReader *bufio.Reader) {
 	filepath := strings.TrimPrefix(message, "Read")
 	filepath = strings.TrimSpace(filepath)
-	file = ReadFile([]byte(filepath))
-	fmt.Fprintf(conn, "Send " + filepath + "\n")
-	fmt.Fprintf(conn, file)
+	file := ReadFile([]byte(filepath))
+	fmt.Fprintf(conn, "Send "+filepath+" "+strconv.Itoa(len(file))+"\n")
+	conn.Write(file)
 }
 
-func handleWrite(message string, conn net.Conn, connReader *bufio.Reader) bool {
-	filepath := strings.TrimPrefix(message, "Write")
-	filepath = strings.TrimSpace(filepath)
-	// Todo: Read filedata
+func handleWrite(message string, conn net.Conn, connReader *bufio.Reader) {
+	fileinfostring := strings.TrimPrefix(message, "Write")
+	fileinfostring = strings.TrimSpace(fileinfostring)
+	fileinfo := strings.Split(fileinfostring, " ")
+	filepath := fileinfo[0]
+	filelength, _ := strconv.Atoi(fileinfo[1])
+	filedata := make([]byte, filelength)
+	connReader.Read(filedata)
 	err := WriteFile([]byte(filepath), filedata)
 	if err != nil {
-		fmt.Fprintf(conn, "Receive Failed: " + filepath + "\n")
+		fmt.Fprintf(conn, "Receive Failed: "+filepath+"\n")
 	} else {
-		fmt.Fprintf(conn, "Receive Succeeded: " + filepath + "\n")
+		fmt.Fprintf(conn, "Receive Succeeded: "+filepath+"\n")
+	}
+}
+
+func handleDefault(message string, conn net.Conn) {
+	if message != "" {
+		fmt.Println("No such command: "+message)
 	}
 }
