@@ -97,6 +97,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer listen.Close()
+	err = initDB()
+	if err != nil {
+		fmt.Println("Error opening DB:", err.Error())
+		os.Exit(1)
+	}
+	defer closeDB()
 	fmt.Println("Listening on " + IP + ":" + PORT)
 	fmt.Println("Max Workers:", MaxWorker)
 	fmt.Println("Max Queued Connections:", MaxQueue)

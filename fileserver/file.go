@@ -14,7 +14,7 @@ var db *bolt.DB
 
 func initDB() error {
 	var err error
-	db, err = bolt.Open("file-server.db", 0600, nil)
+	db, err = bolt.Open("fileserver.db", 0600, nil)
 	return err
 }
 
