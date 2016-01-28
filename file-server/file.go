@@ -22,7 +22,7 @@ func closeDB() {
 	db.Close()
 }
 
-func ReadFile(filename []byte) []byte {
+func readFile(filename []byte) []byte {
 	var file []byte
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("files"))
@@ -32,7 +32,7 @@ func ReadFile(filename []byte) []byte {
 	return file
 }
 
-func WriteFile(filename []byte, filedata []byte) error {
+func writeFile(filename []byte, filedata []byte) error {
 	return db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("files"))
 		if err != nil {
@@ -55,7 +55,7 @@ func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
 func handleRead(message string, conn net.Conn, connReader *bufio.Reader) {
 	filepath := strings.TrimPrefix(message, "Read")
 	filepath = strings.TrimSpace(filepath)
-	file := ReadFile([]byte(filepath))
+	file := readFile([]byte(filepath))
 	fmt.Fprintf(conn, "Send "+filepath+" "+strconv.Itoa(len(file))+"\n")
 	conn.Write(file)
 }
@@ -68,7 +68,7 @@ func handleWrite(message string, conn net.Conn, connReader *bufio.Reader) {
 	filelength, _ := strconv.Atoi(fileinfo[1])
 	filedata := make([]byte, filelength)
 	connReader.Read(filedata)
-	err := WriteFile([]byte(filepath), filedata)
+	err := writeFile([]byte(filepath), filedata)
 	if err != nil {
 		fmt.Fprintf(conn, "Receive Failed: "+filepath+"\n")
 	} else {
@@ -78,6 +78,6 @@ func handleWrite(message string, conn net.Conn, connReader *bufio.Reader) {
 
 func handleDefault(message string, conn net.Conn) {
 	if message != "" {
-		fmt.Println("No such command: "+message)
+		fmt.Println("No such command: " + message)
 	}
 }
