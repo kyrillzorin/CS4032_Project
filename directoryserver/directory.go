@@ -11,6 +11,7 @@ import (
 )
 
 var db *bolt.DB
+var currentServer []byte = nil
 
 func initDB() error {
 	var err error
@@ -22,8 +23,25 @@ func closeDB() {
 	db.Close()
 }
 
-func randomServer() []byte {
-
+func getServer() []byte {
+	var server []byte
+	db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket([]byte("servers")).Cursor()
+		var k, v []byte
+		if currentServer == nil {
+			k, v := c.First()
+		} else {
+			k, v := c.Seek(currentServer)
+		}
+		k, v = c.Next()
+		if k == nil || v == nil{
+			k, v := c.First()
+		}
+		currentServer = k
+		server = v
+		return nil
+	})
+	return server
 }
 
 func getFileLocation(filename []byte) []byte {
@@ -40,7 +58,7 @@ func getFileLocation(filename []byte) []byte {
 }
 
 func setFileLocation(filename []byte) []byte, error {
-	location:= randomServer()
+	location:= getServer()
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("locations"))
 		if err != nil {
