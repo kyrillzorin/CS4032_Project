@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"strconv"
@@ -43,9 +44,9 @@ func writeFile(filename []byte, filedata []byte) error {
 }
 
 func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
-	if strings.HasPrefix(message, "Read") {
+	if strings.HasPrefix(message, "Read ") {
 		handleRead(message, conn, connReader)
-	} else if strings.HasPrefix(message, "Write") {
+	} else if strings.HasPrefix(message, "Write ") {
 		handleWrite(message, conn, connReader)
 	} else {
 		handleDefault(message, conn)
@@ -53,21 +54,20 @@ func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
 }
 
 func handleRead(message string, conn net.Conn, connReader *bufio.Reader) {
-	filepath := strings.TrimPrefix(message, "Read")
+	filepath := strings.TrimPrefix(message, "Read ")
 	filepath = strings.TrimSpace(filepath)
 	file := readFile([]byte(filepath))
-	fmt.Fprintf(conn, "Send "+filepath+" "+strconv.Itoa(len(file))+"\n")
-	conn.Write(file)
+	filebase64 := base64.StdEncoding.EncodeToString(file)
+	fmt.Fprintf(conn, "Send "+filepath+"\n")
+	fmt.Fprintf(conn, filebase64+"\n")
 }
 
 func handleWrite(message string, conn net.Conn, connReader *bufio.Reader) {
-	fileinfostring := strings.TrimPrefix(message, "Write")
-	fileinfostring = strings.TrimSpace(fileinfostring)
-	fileinfo := strings.Split(fileinfostring, " ")
-	filepath := fileinfo[0]
-	filelength, _ := strconv.Atoi(fileinfo[1])
-	filedata := make([]byte, filelength)
-	connReader.Read(filedata)
+	filepath := strings.TrimPrefix(message, "Write ")
+	filepath = strings.TrimSpace(fileinfostring)
+	filedatastring, _ := connReader.ReadString('\n')
+	filedatastring = strings.TrimSpace(filedata)
+	filedata, _ := base64.StdEncoding.DecodeString(filedatastring)
 	err := writeFile([]byte(filepath), filedata)
 	if err != nil {
 		fmt.Fprintf(conn, "Receive Failed: "+filepath+"\n")

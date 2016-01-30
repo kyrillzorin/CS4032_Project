@@ -2,6 +2,7 @@ package clientproxy
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -38,13 +39,11 @@ func Open(name string) (*File, error) {
 	for !strings.HasPrefix(message, "Send ") {
 		message, _ := connReader.ReadString('\n')
 	}
-	fileinfostring := strings.TrimPrefix(message, "Send")
-	fileinfostring = strings.TrimSpace(fileinfostring)
-	fileinfo := strings.Split(fileinfostring, " ")
-	filepath := fileinfo[0]
-	filelength, _ := strconv.Atoi(fileinfo[1])
-	filedata := make([]byte, filelength)
-	connReader.Read(filedata)
+	filepath := strings.TrimPrefix(message, "Send ")
+	filepath = strings.TrimSpace(filepath)
+	filedatastring, _ := connReader.ReadString('\n')
+	filedatastring = strings.TrimSpace(filedata)
+	filedata, _ := base64.StdEncoding.DecodeString(filedatastring)
 	err := writeFile([]byte(filepath), filedata)
 	if err != nil {
 		file.name = ""
@@ -56,15 +55,16 @@ func (f *File) Close() {
 	conn, _ := net.Dial("tcp", "127.0.0.1:8000")
 	defer conn.Close()
 	file := readFile([]byte(f.name))
-	fmt.Fprintf(conn, "Send "+f.name+" "+strconv.Itoa(len(file))+"\n")
-	conn.Write(file)
+	filebase64 := base64.StdEncoding.EncodeToString(file)
+	fmt.Fprintf(conn, "Write "+f.name+"\n")
+	fmt.Fprintf(conn, filebase64+"\n")
 	connReader := bufio.NewReader(conn)
 	message := ""
 	message, _ := connReader.ReadString('\n')
 	for !strings.HasPrefix(message, "Receive Succeeded: ") {
 		if strings.HasPrefix(message, "Receive Failed: ") {
-			fmt.Fprintf(conn, "Send "+f.name+" "+strconv.Itoa(len(file))+"\n")
-			conn.Write(file)
+			fmt.Fprintf(conn, "Write "+f.name+"\n")
+			fmt.Fprintf(conn, filebase64+"\n")
 		}
 		message, _ := connReader.ReadString('\n')
 	}
