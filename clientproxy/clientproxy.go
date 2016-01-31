@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/boltdb/bolt"
@@ -42,7 +40,7 @@ func Open(name string) (*File, error) {
 	filepath := strings.TrimPrefix(message, "Send ")
 	filepath = strings.TrimSpace(filepath)
 	filedatastring, _ := connReader.ReadString('\n')
-	filedatastring = strings.TrimSpace(filedata)
+	filedatastring = strings.TrimSpace(filedatastring)
 	filedata, _ := base64.StdEncoding.DecodeString(filedatastring)
 	err := writeFile([]byte(filepath), filedata)
 	if err != nil {
@@ -59,7 +57,6 @@ func (f *File) Close() {
 	fmt.Fprintf(conn, "Write "+f.name+"\n")
 	fmt.Fprintf(conn, filebase64+"\n")
 	connReader := bufio.NewReader(conn)
-	message := ""
 	message, _ := connReader.ReadString('\n')
 	for !strings.HasPrefix(message, "Receive Succeeded: ") {
 		if strings.HasPrefix(message, "Receive Failed: ") {
@@ -80,7 +77,7 @@ func (f *File) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (f *File) Read() []byte {
+func (f *File) ReadByte() []byte {
 	return readFile([]byte(f.name))
 }
 

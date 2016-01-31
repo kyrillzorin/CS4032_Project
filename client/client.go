@@ -28,6 +28,6 @@ func main() {
 	file.Close()
 	
 	file = clientProxy.Open(test.jpg)
-	data = file.Read()
+	data = file.ReadByte()
 	ioutil.WriteFile("output.jpg", data, 0644)
 }
