@@ -35,7 +35,7 @@ func Open(name string) (*File, error) {
 	connReader := bufio.NewReader(conn)
 	message := ""
 	for !strings.HasPrefix(message, "Send ") {
-		message, _ := connReader.ReadString('\n')
+		message, _ = connReader.ReadString('\n')
 	}
 	filepath := strings.TrimPrefix(message, "Send ")
 	filepath = strings.TrimSpace(filepath)
@@ -63,7 +63,7 @@ func (f *File) Close() {
 			fmt.Fprintf(conn, "Write "+f.name+"\n")
 			fmt.Fprintf(conn, filebase64+"\n")
 		}
-		message, _ := connReader.ReadString('\n')
+		message, _ = connReader.ReadString('\n')
 	}
 	f.name = ""
 }
