@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 
 	"github.com/boltdb/bolt"
@@ -24,12 +23,19 @@ func closeDB() {
 }
 
 func readFile(filename []byte) []byte {
-	var file []byte
+	var file []byte = []byte("")
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("files"))
+		return err
+	})
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("files"))
 		file = b.Get(filename)
 		return nil
 	})
+	if file == nil {
+		file = []byte("")
+	}
 	return file
 }
 
@@ -64,9 +70,9 @@ func handleRead(message string, conn net.Conn, connReader *bufio.Reader) {
 
 func handleWrite(message string, conn net.Conn, connReader *bufio.Reader) {
 	filepath := strings.TrimPrefix(message, "Write ")
-	filepath = strings.TrimSpace(fileinfostring)
+	filepath = strings.TrimSpace(filepath)
 	filedatastring, _ := connReader.ReadString('\n')
-	filedatastring = strings.TrimSpace(filedata)
+	filedatastring = strings.TrimSpace(filedatastring)
 	filedata, _ := base64.StdEncoding.DecodeString(filedatastring)
 	err := writeFile([]byte(filepath), filedata)
 	if err != nil {

@@ -151,7 +151,7 @@ func HELO(text string) string {
 }
 
 func getIP() string {
-	e := os.Getenv("CS4032_LAB_4_IP")
+	e := os.Getenv("CS4032_FS_IP")
 	if len(e) > 0 {
 		return e
 	}
@@ -159,7 +159,7 @@ func getIP() string {
 }
 
 func getExternalIP() string {
-	e := os.Getenv("CS4032_LAB_4_IP_EXT")
+	e := os.Getenv("CS4032_FS_IP_EXT")
 	resp, err := http.Get("http://myexternalip.com/raw")
 	if (err != nil) || (e == "false") {
 		return IP
@@ -172,7 +172,7 @@ func getExternalIP() string {
 }
 
 func getPort() string {
-	e := os.Getenv("CS4032_LAB_4_PORT")
+	e := os.Getenv("CS4032_FS_PORT")
 	if len(e) > 0 {
 		return e
 	}
@@ -180,7 +180,7 @@ func getPort() string {
 }
 
 func getMaxWorkers() int {
-	e := os.Getenv("CS4032_LAB_4_MAX_WORKERS")
+	e := os.Getenv("CS4032_FS_MAX_WORKERS")
 	if len(e) > 0 {
 		i, _ := strconv.Atoi(e)
 		return i
@@ -189,7 +189,7 @@ func getMaxWorkers() int {
 }
 
 func getMaxQueue() int {
-	e := os.Getenv("CS4032_LAB_4_MAX_QUEUE")
+	e := os.Getenv("CS4032_FS_MAX_QUEUE")
 	if len(e) > 0 {
 		i, _ := strconv.Atoi(e)
 		return i

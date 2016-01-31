@@ -1,0 +1,6 @@
+#! /bin/bash
+export CS4032_FS_IP=0.0.0.0
+export CS4032_FS_EXT="true"
+export CS4032_FS_PORT=8001
+export CS4032_FS_MAX_WORKERS=15
+export CS4032_FS_MAX_QUEUE=20
