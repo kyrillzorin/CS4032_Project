@@ -12,18 +12,33 @@ import (
 
 var db *bolt.DB
 
-func initDB() error {
+func initFileServer() error {
 	var err error
 	db, err = bolt.Open("fileserver.db", 0600, nil)
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists([]byte("files"))
 		return nil
 	})
+	registerServer()
 	return err
 }
 
 func closeDB() {
 	db.Close()
+}
+
+func registerServer() {
+	conn, _ := net.Dial("tcp", DIRECTORY)
+	defer conn.Close()
+	connReader = bufio.NewReader(conn)
+	message = ""
+	fmt.Fprintf(conn, "RegisterNode "+NODE+" "+EXT_IP+":"+PORT+"\n")
+	for !strings.HasPrefix(message, "Registered ") {
+		if strings.HasPrefix(message, "Register Failed: ") {
+			fmt.Fprintf(conn, "RegisterNode "+NODE+" "+EXT_IP+":"+PORT+"\n")
+		}
+		message, _ = connReader.ReadString('\n')
+	}
 }
 
 func readFile(filename []byte) []byte {

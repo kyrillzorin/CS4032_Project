@@ -13,6 +13,8 @@ import (
 var (
 	IP        = getIP()
 	EXT_IP    = getExternalIP()
+	NODE      = getNode()
+	DIRECTORY = getDirectory()
 	PORT      = getPort()
 	MaxWorker = getMaxWorkers()
 	MaxQueue  = getMaxQueue()
@@ -97,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer listen.Close()
-	err = initDB()
+	err = initFileServer()
 	if err != nil {
 		fmt.Println("Error opening DB:", err.Error())
 		os.Exit(1)
@@ -174,6 +176,22 @@ func getPort() string {
 		return e
 	}
 	return "8080"
+}
+
+func getNode() string {
+	e := os.Getenv("CS4032_FS_NODE")
+	if len(e) > 0 {
+		return e
+	}
+	return "fileserver"
+}
+
+func getDirectory() string {
+	e := os.Getenv("CS4032_FS_DIRECTORY")
+	if len(e) > 0 {
+		return e
+	}
+	return "localhost:8001"
 }
 
 func getMaxWorkers() int {

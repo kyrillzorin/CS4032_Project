@@ -4,3 +4,5 @@ export CS4032_FS_EXT="true"
 export CS4032_FS_PORT=8000
 export CS4032_FS_MAX_WORKERS=15
 export CS4032_FS_MAX_QUEUE=20
+export CS4032_FS_NODE="fileserver"
+export CS4032_FS_DIRECTORY="localhost:8001"

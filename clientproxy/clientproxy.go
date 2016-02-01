@@ -36,7 +36,7 @@ func Open(name string) (*File, error) {
 	file.name = name
 	fmt.Fprintf(conn, "Open "+name+"\n")
 	connReader := bufio.NewReader(conn)
-	message, _ = connReader.ReadString('\n')
+	message, _ := connReader.ReadString('\n')
 	if strings.HasPrefix(message, "IsLocked ") {
 		return file, errors.New("File is locked")
 	}

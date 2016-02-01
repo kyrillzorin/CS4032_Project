@@ -29,7 +29,30 @@ func closeDB() {
 	db.Close()
 }
 
-func getServer() []byte {
+func getServer(serverID []byte) []byte {
+	var server []byte
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("servers"))
+		server = b.Get(serverID)
+		return nil
+	})
+	if server == nil {
+		server = []byte("")
+	}
+	return server
+}
+
+func setServer(serverID []byte, serverinfo []byte) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("servers"))
+		if err != nil {
+			return err
+		}
+		return b.Put(serverID, serverinfo)
+	})
+}
+
+func selectServer() []byte {
 	var server []byte
 	db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket([]byte("servers")).Cursor()
@@ -44,7 +67,7 @@ func getServer() []byte {
 			k, v := c.First()
 		}
 		currentServer = k
-		server = v
+		server = k
 		return nil
 	})
 	return server
@@ -60,11 +83,11 @@ func getFileLocation(filename []byte) []byte {
 	if location == nil {
 		location, _ = setFileLocation(filename)
 	}
-	return location
+	return getServer(location)
 }
 
 func setFileLocation(filename []byte) []byte, error {
-	location:= getServer()
+	location:= selectServer()
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("locations"))
 		if err != nil {
@@ -110,6 +133,8 @@ func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
 		handleOpen(message, conn, connReader)
 	} else if strings.HasPrefix(message, "Close ") {
 		handleClose(message, conn, connReader)
+	} else if strings.HasPrefix(message, "RegisterNode ") {
+		handleRegister(message, conn, connReader)
 	} else {
 		handleDefault(message, conn)
 	}
@@ -136,6 +161,20 @@ func handleClose(message string, conn net.Conn, connReader *bufio.Reader) {
 		fmt.Fprintf(conn, "Unlock Failed: "+filepath+"\n")
 	} else {
 		fmt.Fprintf(conn, "Unlocked "+filepath+"\n")
+	}
+}
+
+func handleRegister(message string, conn net.Conn, connReader *bufio.Reader) {
+	serverinfostring := strings.TrimPrefix(message, "RegisterNode ")
+	serverinfostring = strings.TrimSpace(serverinfostring)
+	serverinfo := strings.Split(serverinfostring, " ")
+	err:= setServer([]byte(serverinfo[0]), []byte(serverinfo[1]))
+
+
+	if err == nil {
+		fmt.Fprintf(conn, "Registered "+serverinfo[0]+"\n")
+	} else {
+		fmt.Fprintf(conn, "Register Failed: "+serverinfo[0]+"\n")
 	}
 }
 
