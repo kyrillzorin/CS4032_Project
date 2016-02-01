@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	err := clientproxy.Init()
+	err := clientproxy.Init("localhost:8001")
 	if err != nil {
 		fmt.Println("Error opening DB:", err.Error())
 		os.Exit(1)
@@ -24,7 +24,7 @@ func main() {
 	file.Close()
 	
 	file, _ = clientproxy.Open("test.jpg")
-	data = file.ReadByte()
+	data, _ = file.ReadByte()
 	ioutil.WriteFile("output.jpg", data, 0644)
 	file.Close()
 }

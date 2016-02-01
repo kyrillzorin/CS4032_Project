@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"errors"
 
 	"github.com/boltdb/bolt"
 )
 
 var db *bolt.DB
+var directoryserver string
 
-func Init() error {
+func Init(server string) error {
 	var err error
 	db, err = bolt.Open("client.db", 0600, nil)
+	directoryserver = server
 	return err
 }
 
@@ -24,16 +27,28 @@ func CloseDB() {
 
 type File struct {
 	name string
+	server string
 }
 
 func Open(name string) (*File, error) {
-	conn, _ := net.Dial("tcp", "127.0.0.1:8000")
-	defer conn.Close()
+	conn, _ := net.Dial("tcp", directoryserver)
 	file := new(File)
 	file.name = name
-	fmt.Fprintf(conn, "Read "+name+"\n")
+	fmt.Fprintf(conn, "Open "+name+"\n")
 	connReader := bufio.NewReader(conn)
-	message := ""
+	message, _ = connReader.ReadString('\n')
+	if strings.HasPrefix(message, "IsLocked ") {
+		return file, errors.New("File is locked")
+	}
+	fileinfostring := strings.TrimPrefix(message, "Location ")
+	fileinfostring = strings.TrimSpace(fileinfostring)
+	file.server := strings.Split(fileinfostring, " ")[1]
+	conn.Close()
+	conn, _ := net.Dial("tcp", file.server)
+	defer conn.Close()
+	connReader = bufio.NewReader(conn)
+	fmt.Fprintf(conn, "Read "+name+"\n")
+	message = ""
 	for !strings.HasPrefix(message, "Send ") {
 		message, _ = connReader.ReadString('\n')
 	}
@@ -50,8 +65,7 @@ func Open(name string) (*File, error) {
 }
 
 func (f *File) Close() {
-	conn, _ := net.Dial("tcp", "127.0.0.1:8000")
-	defer conn.Close()
+	conn, _ := net.Dial("tcp", f.server)
 	file := readFile([]byte(f.name))
 	filebase64 := base64.StdEncoding.EncodeToString(file)
 	fmt.Fprintf(conn, "Write "+f.name+"\n")
@@ -65,26 +79,51 @@ func (f *File) Close() {
 		}
 		message, _ = connReader.ReadString('\n')
 	}
+	conn.Close()
+	conn, _ := net.Dial("tcp", directoryserver)
+	defer conn.Close()
+	connReader = bufio.NewReader(conn)
+	message = ""
+	fmt.Fprintf(conn, "Close "+f.name+"\n")
+	for !strings.HasPrefix(message, "Unlocked ") {
+		if strings.HasPrefix(message, "Unlock Failed: ") {
+			fmt.Fprintf(conn, "Close "+f.name+"\n")
+		}
+		message, _ = connReader.ReadString('\n')
+	}
 	f.name = ""
 }
 
 func (f *File) Write(p []byte) (n int, err error) {
 	n = 0
-	err = writeFile([]byte(f.name), p)
-	if err == nil {
-		n = len(p)
+	err = errors.New("File is closed")
+	if f.name != "" {
+		err = writeFile([]byte(f.name), p)
+		if err == nil {
+			n = len(p)
+		}
 	}
 	return
 }
 
-func (f *File) ReadByte() []byte {
-	return readFile([]byte(f.name))
+func (f *File) ReadByte() ([]byte, error) {
+	err := errors.New("File is closed")
+	var data []byte
+	if f.name != "" {
+		err = nil
+		data = readFile([]byte(f.name))
+	}
+	return data, err
 }
 
 func (f *File) Read(p []byte) (n int, err error) {
-	filedata := readFile([]byte(f.name))
-	n = copy(p, filedata)
-	err = nil
+	n = 0
+	err = errors.New("File is closed")
+	if f.name != "" {
+		filedata := readFile([]byte(f.name))
+		n = copy(p, filedata)
+		err = nil
+	}
 	return
 }
 

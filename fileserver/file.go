@@ -15,6 +15,10 @@ var db *bolt.DB
 func initDB() error {
 	var err error
 	db, err = bolt.Open("fileserver.db", 0600, nil)
+	db.Update(func(tx *bolt.Tx) error {
+		tx.CreateBucketIfNotExists([]byte("files"))
+		return nil
+	})
 	return err
 }
 
@@ -23,11 +27,7 @@ func closeDB() {
 }
 
 func readFile(filename []byte) []byte {
-	var file []byte = []byte("")
-	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("files"))
-		return err
-	})
+	var file []byte
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("files"))
 		file = b.Get(filename)
