@@ -6,12 +6,17 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/boltdb/bolt"
 )
 
 var db *bolt.DB
 var currentServer []byte = nil
+var locks = struct{
+    sync.RWMutex
+    m map[string]bool
+}{m: make(map[string]bool)}
 
 func initDB() error {
 	var err error
@@ -19,7 +24,6 @@ func initDB() error {
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists([]byte("servers"))
 		tx.CreateBucketIfNotExists([]byte("locations"))
-		tx.CreateBucketIfNotExists([]byte("locks"))
 		return nil
 	})
 	return err
@@ -58,13 +62,13 @@ func selectServer() []byte {
 		c := tx.Bucket([]byte("servers")).Cursor()
 		var k, v []byte
 		if currentServer == nil {
-			k, v := c.First()
+			k, v = c.First()
 		} else {
-			k, v := c.Seek(currentServer)
+			k, v = c.Seek(currentServer)
 		}
 		k, v = c.Next()
 		if k == nil || v == nil{
-			k, v := c.First()
+			k, v = c.First()
 		}
 		currentServer = k
 		server = k
@@ -86,7 +90,7 @@ func getFileLocation(filename []byte) []byte {
 	return getServer(location)
 }
 
-func setFileLocation(filename []byte) []byte, error {
+func setFileLocation(filename []byte) ([]byte, error) {
 	location:= selectServer()
 	err := db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("locations"))
@@ -99,33 +103,16 @@ func setFileLocation(filename []byte) []byte, error {
 }
 
 func getLock(filename []byte) []byte {
-	var lock []byte
-	db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("locks"))
-		location = b.Get(filename)
-		return nil
-	})
-	if lock == nil {
-		lock = []byte("false")
-	}
-	return lock
+	locks.RLock()
+	defer locks.RUnlock()
+	return []byte(strconv.FormatBool(locks.m[string(filename)]))
 }
 
-func setLock(filename []byte, bool status) error {
-	var lock []byte
-	if status {
-		lock = []byte("true")
-	} else {
-		lock = []byte("false")
-	}
-	err := db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("locks"))
-		if err != nil {
-			return err
-		}
-		return b.Put(filename, lock)
-	})
-	return err
+func setLock(filename []byte, status bool) error {
+	locks.Lock()
+	locks.m[string(filename)] = status
+	locks.Unlock()
+	return nil
 }
 
 func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
@@ -147,7 +134,7 @@ func handleOpen(message string, conn net.Conn, connReader *bufio.Reader) {
 	lock := string(getLock([]byte(filepath)))
 	if lock == "false" {
 		setLock([]byte(filepath), true)
-		fmt.Fprintf(conn, "Location "+filepath+" "+location+"\n")
+		fmt.Fprintf(conn, "Location "+filepath+" "+string(location)+"\n")
 	} else {
 		fmt.Fprintf(conn, "IsLocked "+filepath+"\n")
 	}

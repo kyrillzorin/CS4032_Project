@@ -140,9 +140,6 @@ func handleRequest(conn net.Conn) {
 
 func killService(conn net.Conn) {
 	conn.Close()
-	for _, client := range Clients {
-		client.Conn.Close()
-	}
 	os.Exit(0)
 }
 
