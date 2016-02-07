@@ -24,6 +24,7 @@ func initDB() error {
 	db.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists([]byte("servers"))
 		tx.CreateBucketIfNotExists([]byte("locations"))
+		tx.CreateBucketIfNotExists([]byte("modified"))
 		return nil
 	})
 	return err
@@ -115,6 +116,40 @@ func setLock(filename []byte, status bool) error {
 	return nil
 }
 
+func getModified(filename []byte) []byte {
+	var modified []byte
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("modified"))
+		modified = b.Get(filename)
+		return nil
+	})
+	if modified == nil {
+		modified = strconv.Itoa(0)
+	}
+	return modified
+}
+
+func setModified(filename []byte) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("modified"))
+		if err != nil {
+			return err
+		}
+		modified := b.Get(filename)
+		if modified == nil {
+			modified = strconv.Itoa(0)
+		}
+		modifiedInt, err := strconv.Atoi(string(modified))
+		if err != nil {
+			return err
+		}
+		modifiedInt++
+		modified = strconv.Itoa(modifiedInt)
+		return b.Put(filename, modified)
+	})
+	return err
+}
+
 func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
 	if strings.HasPrefix(message, "Open ") {
 		handleOpen(message, conn, connReader)
@@ -130,11 +165,12 @@ func handleClient(message string, conn net.Conn, connReader *bufio.Reader) {
 func handleOpen(message string, conn net.Conn, connReader *bufio.Reader) {
 	filepath := strings.TrimPrefix(message, "Open ")
 	filepath = strings.TrimSpace(filepath)
-	location := getFileLocation([]byte(filepath))
+	location := string(getFileLocation([]byte(filepath)))
 	lock := string(getLock([]byte(filepath)))
+	modified := string(getModified([]byte(filepath)))
 	if lock == "false" {
 		setLock([]byte(filepath), true)
-		fmt.Fprintf(conn, "Location "+filepath+" "+string(location)+"\n")
+		fmt.Fprintf(conn, "Location "+filepath+" "+location+" "+modified+"\n")
 	} else {
 		fmt.Fprintf(conn, "IsLocked "+filepath+"\n")
 	}
@@ -149,6 +185,7 @@ func handleClose(message string, conn net.Conn, connReader *bufio.Reader) {
 	} else {
 		fmt.Fprintf(conn, "Unlocked "+filepath+"\n")
 	}
+	setModified([]byte(filepath))
 }
 
 func handleRegister(message string, conn net.Conn, connReader *bufio.Reader) {

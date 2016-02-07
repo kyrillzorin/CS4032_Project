@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"errors"
 
@@ -18,6 +19,11 @@ func Init(server string) error {
 	var err error
 	db, err = bolt.Open("client.db", 0600, nil)
 	directoryserver = server
+	db.Update(func(tx *bolt.Tx) error {
+		tx.CreateBucketIfNotExists([]byte("files"))
+		tx.CreateBucketIfNotExists([]byte("modified"))
+		return nil
+	})
 	return err
 }
 
@@ -42,56 +48,65 @@ func Open(name string) (*File, error) {
 	}
 	fileinfostring := strings.TrimPrefix(message, "Location ")
 	fileinfostring = strings.TrimSpace(fileinfostring)
-	file.server := strings.Split(fileinfostring, " ")[1]
+	file.server = strings.Split(fileinfostring, " ")[1]
+	modified, _ := strconv.Atoi(strings.Split(fileinfostring, " ")[2])
 	conn.Close()
-	conn, _ := net.Dial("tcp", file.server)
-	defer conn.Close()
-	connReader = bufio.NewReader(conn)
-	fmt.Fprintf(conn, "Read "+name+"\n")
-	message = ""
-	for !strings.HasPrefix(message, "Send ") {
-		message, _ = connReader.ReadString('\n')
-	}
-	filepath := strings.TrimPrefix(message, "Send ")
-	filepath = strings.TrimSpace(filepath)
-	filedatastring, _ := connReader.ReadString('\n')
-	filedatastring = strings.TrimSpace(filedatastring)
-	filedata, _ := base64.StdEncoding.DecodeString(filedatastring)
-	err := writeFile([]byte(filepath), filedata)
-	if err != nil {
-		file.name = ""
+	var err error
+	if modified > getModified([]byte(name)) {
+		conn, _ := net.Dial("tcp", file.server)
+		defer conn.Close()
+		connReader = bufio.NewReader(conn)
+		fmt.Fprintf(conn, "Read "+name+"\n")
+		message = ""
+		for !strings.HasPrefix(message, "Send ") {
+			message, _ = connReader.ReadString('\n')
+		}
+		filepath := strings.TrimPrefix(message, "Send ")
+		filepath = strings.TrimSpace(filepath)
+		filedatastring, _ := connReader.ReadString('\n')
+		filedatastring = strings.TrimSpace(filedatastring)
+		filedata, _ := base64.StdEncoding.DecodeString(filedatastring)
+		err = writeFile([]byte(filepath), filedata)
+		if err != nil {
+			file.name = ""
+			return file, err
+		}
+		setModifiedInt([]byte(name), modified)
 	}
 	return file, err
 }
 
 func (f *File) Close() {
-	conn, _ := net.Dial("tcp", f.server)
-	file := readFile([]byte(f.name))
-	filebase64 := base64.StdEncoding.EncodeToString(file)
-	fmt.Fprintf(conn, "Write "+f.name+"\n")
-	fmt.Fprintf(conn, filebase64+"\n")
-	connReader := bufio.NewReader(conn)
-	message, _ := connReader.ReadString('\n')
-	for !strings.HasPrefix(message, "Receive Succeeded: ") {
-		if strings.HasPrefix(message, "Receive Failed: ") {
-			fmt.Fprintf(conn, "Write "+f.name+"\n")
-			fmt.Fprintf(conn, filebase64+"\n")
+	if f.name != "" {
+		conn, _ := net.Dial("tcp", f.server)
+		file := readFile([]byte(f.name))
+		filebase64 := base64.StdEncoding.EncodeToString(file)
+		fmt.Fprintf(conn, "Write "+f.name+"\n")
+		fmt.Fprintf(conn, filebase64+"\n")
+		connReader := bufio.NewReader(conn)
+		message, _ := connReader.ReadString('\n')
+		for !strings.HasPrefix(message, "Receive Succeeded: ") {
+			if strings.HasPrefix(message, "Receive Failed: ") {
+				fmt.Fprintf(conn, "Write "+f.name+"\n")
+				fmt.Fprintf(conn, filebase64+"\n")
+			}
+			message, _ = connReader.ReadString('\n')
 		}
-		message, _ = connReader.ReadString('\n')
-	}
-	conn.Close()
-	conn, _ := net.Dial("tcp", directoryserver)
-	defer conn.Close()
-	connReader = bufio.NewReader(conn)
-	message = ""
-	fmt.Fprintf(conn, "Close "+f.name+"\n")
-	for !strings.HasPrefix(message, "Unlocked ") {
-		if strings.HasPrefix(message, "Unlock Failed: ") {
-			fmt.Fprintf(conn, "Close "+f.name+"\n")
+		conn.Close()
+		conn, _ := net.Dial("tcp", directoryserver)
+		defer conn.Close()
+		connReader = bufio.NewReader(conn)
+		message = ""
+		fmt.Fprintf(conn, "Close "+f.name+"\n")
+		for !strings.HasPrefix(message, "Unlocked ") {
+			if strings.HasPrefix(message, "Unlock Failed: ") {
+				fmt.Fprintf(conn, "Close "+f.name+"\n")
+			}
+			message, _ = connReader.ReadString('\n')
 		}
-		message, _ = connReader.ReadString('\n')
+		setModified([]byte(f.name))
+		f.name = ""
 	}
-	f.name = ""
 }
 
 func (f *File) Write(p []byte) (n int, err error) {
@@ -145,4 +160,55 @@ func writeFile(filename []byte, filedata []byte) error {
 		}
 		return b.Put(filename, filedata)
 	})
+}
+
+func getModified(filename []byte) int {
+	var modified []byte
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("modified"))
+		modified = b.Get(filename)
+		return nil
+	})
+	if modified == nil {
+		return 0
+	}
+	var err error
+	modifiedInt, err := strconv.Atoi(modified)
+	if err != nil {
+		return 0
+	}
+	return modifiedInt
+}
+
+func setModified(filename []byte) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("modified"))
+		if err != nil {
+			return err
+		}
+		modified := b.Get(filename)
+		if modified == nil {
+			modified = strconv.Itoa(0)
+		}
+		modifiedInt, err := strconv.Atoi(string(modified))
+		if err != nil {
+			return err
+		}
+		modifiedInt++
+		modified = strconv.Itoa(modifiedInt)
+		return b.Put(filename, modified)
+	})
+	return err
+}
+
+func setModifiedInt(filename []byte, data int) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("modified"))
+		if err != nil {
+			return err
+		}
+		modified := strconv.Itoa(data)
+		return b.Put(filename, modified)
+	})
+	return err
 }
