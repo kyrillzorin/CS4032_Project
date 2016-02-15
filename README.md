@@ -19,4 +19,6 @@ To store files the clients and servers use boltdb, an embedded database which st
 This means that commonly used files and other data are cached in RAM for faster access.
 The client proxy provides a transparent file access interface to the distributed filesystem, similar to the standard library file implementation.
 An example client which uses the client proxy library is included in this repository.
+Compile and start bash scripts are provided for the servers and client.
+The servers can be configured by modifying the config file or providing command line arguments to the start script.
 
